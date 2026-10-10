@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>GeoSpotting Camera</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="css/app.css">
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+  <header class="topbar" id="topbar">
+    <button class="icon-btn" id="back" aria-label="Back" hidden>
+      <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
+    </button>
+    <h1 id="title">GeoSpotting Camera</h1>
+    <button class="icon-btn" id="open-settings" aria-label="Settings">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+    </button>
+  </header>
+
+  <!-- Projects list -->
+  <main class="view" id="view-projects" hidden>
+    <ul class="project-list" id="project-list"></ul>
+    <p class="empty" id="projects-empty" hidden>No projects yet. Create one to start taking geotagged photos.</p>
+    <button class="fab" id="new-project">+ New project</button>
+  </main>
+
+  <!-- Single project -->
+  <main class="view" id="view-project" hidden>
+    <div class="toolbar">
+      <button class="btn primary" id="go-camera">Camera</button>
+      <button class="btn" id="go-export">Export ZIP</button>
+      <button class="btn" id="rename-project">Rename</button>
+      <button class="btn danger" id="delete-project">Delete</button>
+    </div>
+    <p class="meta" id="project-meta"></p>
+    <ul class="grid" id="photo-grid"></ul>
+    <p class="empty" id="photos-empty" hidden>No photos in this project yet.</p>
+  </main>
+
+  <!-- Camera -->
+  <main class="view camera" id="view-camera" hidden>
+    <video id="viewfinder" playsinline muted autoplay></video>
+    <div class="flash" id="flash"></div>
+    <button class="icon-btn cam-corner left" id="camera-back" aria-label="Back to project">
+      <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
+    </button>
+    <button class="icon-btn cam-corner right" id="camera-settings" aria-label="Settings">
+      <svg viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>
+    </button>
+    <div class="gps-pill" id="gps-pill" data-state="none">
+      <span class="dot"></span><span id="gps-text">Waiting for GPS…</span>
+    </div>
+    <p class="camera-error" id="camera-error" hidden></p>
+    <div class="camera-controls">
+      <button class="thumb-btn" id="last-thumb" aria-label="Open project"><img alt=""><span id="shot-count">0</span></button>
+      <button class="shutter" id="shutter" aria-label="Take photo"></button>
+      <label class="icon-btn native" aria-label="Use system camera app" title="Use system camera app">
+        <svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        <input type="file" accept="image/*" capture="environment" id="native-input" hidden>
+      </label>
+    </div>
+  </main>
+
+  <!-- Dialogs -->
+  <dialog id="dlg-settings">
+    <form method="dialog" class="dlg">
+      <h2>Settings</h2>
+      <label>Required accuracy (m)
+        <input type="number" name="accuracy" min="0.5" step="0.5" required>
+      </label>
+      <label>Max. GPS fix age (s)
+        <input type="number" name="maxFixAge" min="1" step="1" required>
+      </label>
+      <label class="check"><input type="checkbox" name="allowInaccurate"> Allow saving when accuracy target isn't met (asks first)</label>
+      <label>Camera resolution (ideal width)
+        <select name="resolution">
+          <option value="1920">1920 (Full HD)</option>
+          <option value="3840">3840 (4K)</option>
+          <option value="4096">Max available</option>
+        </select>
+      </label>
+      <label>Stored photo JPEG quality
+        <input type="number" name="captureQuality" min="0.5" max="1" step="0.01" required>
+      </label>
+      <p class="meta" id="storage-info"></p>
+      <div class="actions">
+        <button class="btn" value="cancel" formnovalidate>Cancel</button>
+        <button class="btn primary" value="save">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dlg-export">
+    <form method="dialog" class="dlg">
+      <h2>Export project</h2>
+      <p class="meta">Photos are proportionally scaled to fit inside the box (never upscaled). Leave a field empty for no limit.</p>
+      <div class="row">
+        <label>Max width (px) <input type="number" name="maxWidth" min="16" step="1"></label>
+        <label>Max height (px) <input type="number" name="maxHeight" min="16" step="1"></label>
+      </div>
+      <label>JPEG quality <input type="number" name="quality" min="0.3" max="1" step="0.01" required></label>
+      <progress id="export-progress" value="0" max="1" hidden></progress>
+      <p class="meta" id="export-status"></p>
+      <div class="actions">
+        <button class="btn" value="cancel" formnovalidate>Close</button>
+        <button class="btn" type="button" id="export-share" hidden>Share…</button>
+        <button class="btn primary" type="button" id="export-run">Build ZIP</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dlg-photo">
+    <form method="dialog" class="dlg photo-dlg">
+      <img id="photo-full" alt="">
+      <dl id="photo-info"></dl>
+      <div class="actions">
+        <button class="btn danger" type="button" id="photo-delete">Delete</button>
+        <a class="btn" id="photo-map" target="_blank" rel="noopener">Map</a>
+        <button class="btn primary" value="close">Close</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dlg-prompt">
+    <form method="dialog" class="dlg">
+      <h2 id="prompt-title"></h2>
+      <p class="meta" id="prompt-message"></p>
+      <input type="text" name="value" id="prompt-input" autocomplete="off">
+      <div class="actions">
+        <button class="btn" value="cancel" formnovalidate>Cancel</button>
+        <button class="btn primary" value="ok" id="prompt-ok">OK</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>

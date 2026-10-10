@@ -1,0 +1,13 @@
+{
+  "name": "geospotting-camera",
+  "version": "1.0.0",
+  "private": true,
+  "description": "PWA camera that tags photos with high-precision GPS and exports projects as resized JPEG + CSV ZIP files.",
+  "type": "module",
+  "scripts": {
+    "start": "node scripts/serve.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "test:e2e": "node scripts/e2e.mjs",
+    "icons": "node scripts/icons.mjs"
+  }
+}
