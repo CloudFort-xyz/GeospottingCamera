@@ -110,6 +110,7 @@ body {
   display: flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 999px;
   background: rgb(0 0 0 / .6); color: #fff; font-size: 15px; font-variant-numeric: tabular-nums; white-space: nowrap;
 }
+.gps-pill .compass { padding-left: 8px; border-left: 1px solid rgb(255 255 255 / .35); }
 .gps-pill .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--bad); }
 .gps-pill[data-state="ok"] .dot { background: var(--ok); }
 .gps-pill[data-state="coarse"] .dot { background: var(--warn); }
@@ -169,6 +170,17 @@ dialog::backdrop { background: rgb(0 0 0 / .5); }
 .dlg .actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
 .dlg progress { width: 100%; }
 .photo-dlg img { width: 100%; max-height: 55vh; object-fit: contain; background: #000; border-radius: 8px; }
+.live {
+  display: flex; align-items: center; gap: 12px; padding: 10px 12px;
+  border: 1px solid var(--border); border-left: 4px solid var(--bad); border-radius: 8px;
+}
+.live[data-state="ok"] { border-left-color: var(--ok); }
+.live[data-state="coarse"] { border-left-color: var(--warn); }
+.live > div { display: grid; }
+.live strong { font-variant-numeric: tabular-nums; }
+.live .meta { margin: 0; font-size: 13px; }
+.live-arrow { flex: none; width: 36px; height: 36px; fill: var(--primary); transition: transform .3s; }
+.live-arrow.north-up { fill: var(--muted); }
 .photo-dlg dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0; font-size: 14px; }
 .photo-dlg dt { color: var(--muted); }
 .photo-dlg dd { margin: 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }

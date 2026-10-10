@@ -87,3 +87,8 @@ export async function getPhoto(id) {
 export async function deletePhoto(id) {
   await done((await store('photos', 'readwrite')).delete(id));
 }
+
+export async function updatePhoto(photo) {
+  await done((await store('photos', 'readwrite')).put(photo));
+  return photo;
+}

@@ -26,7 +26,7 @@ export async function exportProject(project, opts, onProgress = () => {}) {
   if (!photos.length) throw new Error('This project has no photos yet');
   const zip = new ZipWriter();
   const folder = slugify(project.name);
-  const rows = [['filename', 'latitude', 'longitude', 'accuracy_m', 'altitude_m', 'taken_at']];
+  const rows = [['filename', 'latitude', 'longitude', 'accuracy_m', 'altitude_m', 'direction_deg', 'direction_ref', 'taken_at']];
 
   for (const [i, p] of photos.entries()) {
     onProgress(i, photos.length);
@@ -37,6 +37,7 @@ export async function exportProject(project, opts, onProgress = () => {}) {
     rows.push([
       name, p.lat.toFixed(8), p.lon.toFixed(8),
       p.accuracy?.toFixed(2) ?? '', Number.isFinite(p.altitude) ? p.altitude.toFixed(2) : '',
+      Number.isFinite(p.heading) ? p.heading.toFixed(1) : '', Number.isFinite(p.heading) ? p.headingRef : '',
       new Date(p.takenAt).toISOString(),
     ]);
   }

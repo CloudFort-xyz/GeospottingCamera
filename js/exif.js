@@ -112,7 +112,8 @@ function writeIfd(dv, u8, offset, entries) {
  * @param {number} meta.lon
  * @param {number} [meta.accuracy]  horizontal accuracy in metres
  * @param {number|null} [meta.altitude]  metres above WGS-84 ellipsoid
- * @param {number|null} [meta.heading]   degrees true
+ * @param {number|null} [meta.heading]   degrees clockwise from north, see headingRef
+ * @param {'T'|'M'} [meta.headingRef]    true or magnetic north (default 'T')
  * @param {number} meta.fixTime     ms epoch of the GPS fix
  * @param {number} meta.takenAt     ms epoch of capture
  * @param {string} [meta.software]
@@ -148,7 +149,7 @@ export function buildExifSegment(meta) {
     gps.push(entry(TAG.GPSAltitude, TYPE.RATIONAL, [toRational(meta.altitude, 100)]));
   }
   if (Number.isFinite(meta.heading)) {
-    gps.push(entry(TAG.GPSImgDirectionRef, TYPE.ASCII, 'T'));
+    gps.push(entry(TAG.GPSImgDirectionRef, TYPE.ASCII, meta.headingRef === 'M' ? 'M' : 'T'));
     gps.push(entry(TAG.GPSImgDirection, TYPE.RATIONAL, [toRational(meta.heading % 360, 100)]));
   }
   if (Number.isFinite(meta.accuracy)) {

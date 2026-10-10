@@ -4,10 +4,13 @@ import { GeoTracker } from './geo.js';
 import { Camera, resizeToJpeg } from './camera.js';
 import { injectGps } from './exif.js';
 import { exportProject, photoFilename } from './export.js';
+import { Compass } from './compass.js';
+import { distance, bearing, cardinal } from './geomath.js';
 
 const $ = (sel) => document.querySelector(sel);
 const geo = new GeoTracker();
 const camera = new Camera($('#viewfinder'));
+const compass = new Compass();
 
 let currentProject = null;
 let objectUrls = [];
@@ -61,6 +64,16 @@ function ask({ title, message = '', value = null, ok = 'OK' }) {
 
 const fmtAcc = (m) => (m < 10 ? m.toFixed(1) : Math.round(m)) + ' m';
 const fmtDate = (t) => new Date(t).toLocaleString();
+const fmtDist = (m) => (m < 100 ? m.toFixed(1) + ' m' : m < 10000 ? Math.round(m) + ' m' : (m / 1000).toFixed(1) + ' km');
+const fmtDir = (h, ref) => `${Math.round(h)}° ${cardinal(h)}${ref === 'M' ? ' (magnetic)' : ref === 'T' ? ' (true)' : ''}`;
+
+/** Camera direction at this instant: compass if live, else GPS course when moving. */
+function currentDirection(fix) {
+  const h = compass.current();
+  if (h !== null) return { heading: h, headingRef: 'M', headingSource: 'compass' };
+  if (fix && Number.isFinite(fix.heading)) return { heading: fix.heading, headingRef: 'T', headingSource: 'gps-course' };
+  return { heading: null, headingRef: null, headingSource: null };
+}
 
 // ---------- routing ----------
 
@@ -108,6 +121,7 @@ async function renderProjects() {
 }
 
 $('#new-project').addEventListener('click', async () => {
+  compass.start();
   const name = await ask({ title: 'New project', value: `Project ${new Date().toLocaleDateString()}`, ok: 'Create' });
   if (!name) return;
   const p = await db.createProject(name);
@@ -131,12 +145,12 @@ async function renderProject() {
     const coarse = ph.accuracy > accuracy;
     li.innerHTML = `<img loading="lazy" alt="Photo ${ph.seq}"><span class="badge ${coarse ? 'coarse' : ''}">±${fmtAcc(ph.accuracy)}</span>`;
     li.querySelector('img').src = trackUrl(ph.thumb);
-    li.addEventListener('click', () => openPhoto(ph.id));
+    li.addEventListener('click', () => { compass.start(); openPhoto(ph.id); });
     grid.append(li);
   }
 }
 
-$('#go-camera').addEventListener('click', () => { location.hash = `#/p/${currentProject.id}/camera`; });
+$('#go-camera').addEventListener('click', () => { compass.start(); location.hash = `#/p/${currentProject.id}/camera`; });
 
 $('#rename-project').addEventListener('click', async () => {
   const name = await ask({ title: 'Rename project', value: currentProject.name, ok: 'Rename' });
@@ -153,23 +167,64 @@ $('#delete-project').addEventListener('click', async () => {
   location.hash = '#/';
 });
 
-async function openPhoto(id) {
-  const ph = await db.getPhoto(id);
-  const dlg = $('#dlg-photo');
-  const url = URL.createObjectURL(ph.blob);
-  $('#photo-full').src = url;
+let livePhoto = null; // photo shown in the detail dialog, for live distance updates
+
+function renderPhotoInfo(ph) {
   const rows = [
     ['File', photoFilename(currentProject, ph)],
     ['Latitude', ph.lat.toFixed(8)],
     ['Longitude', ph.lon.toFixed(8)],
     ['Accuracy', `±${ph.accuracy.toFixed(2)} m`],
     ['Altitude', Number.isFinite(ph.altitude) ? `${ph.altitude.toFixed(1)} m` + (Number.isFinite(ph.altitudeAccuracy) ? ` (±${ph.altitudeAccuracy.toFixed(1)} m)` : '') : '—'],
-    ['Fix offset', `${((ph.fixTime - ph.takenAt) / 1000).toFixed(1)} s vs. shutter`],
+    ['Direction', Number.isFinite(ph.heading) ? fmtDir(ph.heading, ph.headingRef) : '—'],
     ['Taken', fmtDate(ph.takenAt)],
+    ph.locationUpdatedAt
+      ? ['Location set', `${fmtDate(ph.locationUpdatedAt)} (moved ${fmtDist(distance(ph.originalLocation.lat, ph.originalLocation.lon, ph.lat, ph.lon))} from original)`]
+      : ['Fix offset', `${((ph.fixTime - ph.takenAt) / 1000).toFixed(1)} s vs. shutter`],
     ['Size', `${ph.width} × ${ph.height}`],
   ];
   $('#photo-info').innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('');
   $('#photo-map').href = `https://www.openstreetmap.org/?mlat=${ph.lat}&mlon=${ph.lon}#map=19/${ph.lat}/${ph.lon}`;
+}
+
+function renderLiveDistance() {
+  const ph = livePhoto;
+  if (!ph) return;
+  const { state, fix } = geo.evaluate(getSettings());
+  const panel = $('#photo-live');
+  panel.dataset.state = state;
+  const arrow = $('#live-arrow');
+  if (!fix) {
+    $('#live-distance').textContent = geo.error ? 'No GPS' : 'Waiting for GPS…';
+    $('#live-detail').textContent = geo.error?.message ?? '';
+    arrow.hidden = true;
+    return;
+  }
+  const d = distance(fix.lat, fix.lon, ph.lat, ph.lon);
+  const b = bearing(fix.lat, fix.lon, ph.lat, ph.lon);
+  const sigma = Math.hypot(fix.accuracy, ph.accuracy);
+  $('#live-distance').textContent = `${fmtDist(d)} away` + (d > 0.05 ? ` · ${cardinal(b)} ${Math.round(b)}°` : '');
+  $('#live-detail').textContent = `You ±${fmtAcc(fix.accuracy)} · photo ±${fmtAcc(ph.accuracy)}` +
+    (d <= sigma ? ' · within combined uncertainty' : '') + (geo.age() >= 2 ? ` · fix ${Math.round(geo.age())}s old` : '');
+  // Arrow points at the photo location: relative to where the phone points if the compass is live, else north-up.
+  const h = compass.current();
+  arrow.hidden = d < 0.05;
+  arrow.style.transform = `rotate(${b - (h ?? 0)}deg)`;
+  arrow.title = h === null ? 'North-up (no compass)' : 'Relative to where the phone points';
+  arrow.classList.toggle('north-up', h === null);
+}
+
+async function openPhoto(id) {
+  const ph = await db.getPhoto(id);
+  const dlg = $('#dlg-photo');
+  const url = URL.createObjectURL(ph.blob);
+  $('#photo-full').src = url;
+  livePhoto = ph;
+  renderPhotoInfo(ph);
+  geo.start();
+  renderLiveDistance();
+  const timer = setInterval(renderLiveDistance, 1000);
+  $('#photo-relocate').onclick = () => relocatePhoto(ph);
   $('#photo-delete').onclick = async () => {
     dlg.close();
     if (!(await ask({ title: 'Delete photo?', ok: 'Delete' }))) return;
@@ -177,8 +232,53 @@ async function openPhoto(id) {
     revokeUrls();
     renderProject();
   };
-  dlg.addEventListener('close', () => URL.revokeObjectURL(url), { once: true });
+  dlg.addEventListener('close', () => {
+    URL.revokeObjectURL(url);
+    clearInterval(timer);
+    livePhoto = null;
+    if ($('#view-camera').hidden) geo.stop();
+  }, { once: true });
   dlg.showModal();
+}
+
+/** Replace a photo's stored location with the current fix (re-tags the stored JPEG). */
+async function relocatePhoto(ph) {
+  const btn = $('#photo-relocate');
+  btn.disabled = true;
+  try {
+    if (geo.age() > getSettings().maxFixAge) {
+      $('#live-distance').textContent = 'Getting fresh GPS fix…';
+      await geo.refresh();
+    }
+    const { state, fix } = geo.evaluate(getSettings());
+    const accepted = await acceptFix(state, fix);
+    if (!accepted) return;
+    const moved = distance(ph.lat, ph.lon, accepted.lat, accepted.lon);
+    const ok = await ask({
+      title: 'Set location?',
+      message: `Replace the saved location (±${fmtAcc(ph.accuracy)}) with your current position (±${fmtAcc(accepted.accuracy)}), ${fmtDist(moved)} away.`,
+      ok: 'Set location',
+    });
+    if (!ok) return;
+    ph.originalLocation ??= { lat: ph.lat, lon: ph.lon, accuracy: ph.accuracy, altitude: ph.altitude, fixTime: ph.fixTime };
+    Object.assign(ph, {
+      lat: accepted.lat, lon: accepted.lon, accuracy: accepted.accuracy,
+      altitude: accepted.altitude, altitudeAccuracy: accepted.altitudeAccuracy,
+      fixTime: accepted.fixTime, locationUpdatedAt: Date.now(),
+    }); // heading is kept: it describes the photo, not where you stand now
+    const bytes = injectGps(new Uint8Array(await ph.blob.arrayBuffer()), ph);
+    ph.blob = new Blob([bytes], { type: 'image/jpeg' });
+    await db.updatePhoto(ph);
+    renderPhotoInfo(ph);
+    renderLiveDistance();
+    toast(`Location updated · ±${fmtAcc(ph.accuracy)}`);
+    renderProject(); // refresh accuracy badges behind the dialog
+  } catch (e) {
+    console.error(e);
+    toast(e.message);
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 // ---------- camera ----------
@@ -197,6 +297,14 @@ function renderGps() {
     const age = geo.age();
     $('#gps-text').textContent = `±${fmtAcc(fix.accuracy)} / ${s.accuracy} m` + (age >= 1 ? ` · ${Math.round(age)}s old` : '');
   }
+  renderCompass();
+}
+
+function renderCompass() {
+  const h = compass.current();
+  const el = $('#compass-text');
+  el.hidden = h === null && !compass.needsPermission;
+  el.textContent = h === null ? 'Tap for compass' : `${Math.round(h)}° ${cardinal(h)}`;
 }
 
 let gpsTimer = null;
@@ -254,8 +362,8 @@ async function acceptFix(state, fix) {
   return (await ask({ title: 'Save anyway?', message: reason, ok: 'Save' })) ? fix : null;
 }
 
-async function savePhoto(jpegBlob, fix, takenAt, width, height) {
-  const meta = { ...fix, takenAt };
+async function savePhoto(jpegBlob, fix, direction, takenAt, width, height) {
+  const meta = { ...fix, ...direction, takenAt };
   const bytes = injectGps(new Uint8Array(await jpegBlob.arrayBuffer()), meta);
   const blob = new Blob([bytes], { type: 'image/jpeg' });
   const { blob: thumb } = await resizeToJpeg(blob, { maxWidth: 320, maxHeight: 320, quality: 0.7 });
@@ -269,10 +377,12 @@ let busy = false;
 $('#shutter').addEventListener('click', async () => {
   if (busy || !camera.active) return;
   busy = true;
+  compass.start(); // no-op once running; on iOS the first tap grants permission
   try {
     // Snapshot both photo and position at the same instant; ask afterwards.
     let { state, fix } = geo.evaluate(getSettings());
     const takenAt = Date.now();
+    const direction = currentDirection(fix);
     const jpeg = await camera.capture(getSettings().captureQuality);
     const flash = $('#flash');
     flash.classList.add('on');
@@ -284,7 +394,7 @@ $('#shutter').addEventListener('click', async () => {
       ({ state, fix } = geo.evaluate(getSettings()));
     }
     const accepted = await acceptFix(state, fix);
-    if (accepted) await savePhoto(jpeg, accepted, takenAt, camera.video.videoWidth, camera.video.videoHeight);
+    if (accepted) await savePhoto(jpeg, accepted, direction, takenAt, camera.video.videoWidth, camera.video.videoHeight);
   } catch (e) {
     console.error(e);
     toast(e.message);
@@ -304,7 +414,9 @@ $('#native-input').addEventListener('change', async (ev) => {
     // Re-encode to bake in EXIF orientation, then replace metadata with ours.
     const { blob, width, height } = await resizeToJpeg(file, { quality: getSettings().captureQuality });
     const accepted = await acceptFix(state, fix);
-    if (accepted) await savePhoto(blob, accepted, takenAt, width, height);
+    // No direction: where the phone points now says nothing about where the system camera was aimed.
+    const noDirection = { heading: null, headingRef: null, headingSource: null };
+    if (accepted) await savePhoto(blob, accepted, noDirection, takenAt, width, height);
   } catch (e) {
     console.error(e);
     toast(e.message);
@@ -314,7 +426,20 @@ $('#native-input').addEventListener('change', async (ev) => {
 $('#camera-back').addEventListener('click', () => { location.hash = `#/p/${currentProject.id}`; });
 $('#camera-settings').addEventListener('click', () => $('#open-settings').click());
 $('#last-thumb').addEventListener('click', () => { location.hash = `#/p/${currentProject.id}`; });
-geo.addEventListener('change', () => { if (!$('#view-camera').hidden) renderGps(); });
+geo.addEventListener('change', () => {
+  if (!$('#view-camera').hidden) renderGps();
+  renderLiveDistance();
+});
+let compassFrame = 0;
+compass.addEventListener('change', () => {
+  if (compassFrame) return;
+  compassFrame = requestAnimationFrame(() => {
+    compassFrame = 0;
+    if (!$('#view-camera').hidden) renderCompass();
+    renderLiveDistance();
+  });
+});
+$('#gps-pill').addEventListener('click', () => compass.start().then(renderCompass));
 
 document.addEventListener('visibilitychange', async () => {
   if ($('#view-camera').hidden) return;

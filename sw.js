@@ -1,10 +1,10 @@
 // App-shell service worker: precache everything, serve cache-first, update in background.
-const VERSION = 'v1.0.0';
+const VERSION = 'v1.1.0';
 const CACHE = `geospotting-${VERSION}`;
 const ASSETS = [
   './', 'index.html', 'manifest.webmanifest', 'css/app.css',
   'js/app.js', 'js/db.js', 'js/settings.js', 'js/geo.js', 'js/camera.js',
-  'js/exif.js', 'js/zip.js', 'js/csv.js', 'js/export.js',
+  'js/exif.js', 'js/zip.js', 'js/csv.js', 'js/export.js', 'js/geomath.js', 'js/compass.js',
   'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png',
 ];
 

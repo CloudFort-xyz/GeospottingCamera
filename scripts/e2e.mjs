@@ -28,8 +28,16 @@ try {
 
   await page.waitForSelector('#view-camera:not([hidden])');
   await page.waitForSelector('#shutter[data-state="ok"]:not([disabled])');
+  // Fake an Android absolute orientation: phone upright, rear camera facing east.
+  await page.evaluate(() => {
+    const fire = () => window.dispatchEvent(new DeviceOrientationEvent('deviceorientationabsolute', { alpha: 270, beta: 90, gamma: 0, absolute: true }));
+    fire();
+    window.__compassTimer = setInterval(fire, 100);
+  });
+  await page.waitForFunction(() => document.querySelector('#compass-text').textContent === '90° E');
   await page.click('#shutter');
   await page.waitForFunction(() => document.querySelector('#shot-count').textContent === '1');
+  await page.evaluate(() => clearInterval(window.__compassTimer));
 
   // Second shot with poor accuracy -> confirmation dialog.
   await context.setGeolocation({ latitude: 50.85041, longitude: 4.35180, accuracy: 25 });
@@ -52,6 +60,21 @@ try {
 
   await page.click('#last-thumb');
   await page.waitForSelector('#view-project:not([hidden]) #photo-grid li:nth-child(3)');
+  // Photo 2 was saved with a poor fix; walk to the right spot and re-set its location.
+  await context.setGeolocation({ latitude: 50.85036, longitude: 4.35172, accuracy: 1.8 });
+  await page.click('#photo-grid li:nth-child(2)');
+  await page.waitForSelector('#dlg-photo[open]');
+  await page.waitForFunction(() => /^\d+\.\d m away · /.test(document.querySelector('#live-distance').textContent));
+  console.log('Live:', await page.textContent('#live-distance'), '|', await page.textContent('#live-detail'));
+  await page.click('#photo-relocate');
+  await page.waitForSelector('#dlg-prompt[open]');
+  assert.match(await page.textContent('#prompt-message'), /current position \(±1\.8 m\)/);
+  await page.click('#prompt-ok');
+  await page.waitForFunction(() => document.querySelector('#live-distance').textContent.startsWith('0.0 m away'));
+  assert.match(await page.textContent('#photo-info'), /Location set.*moved 7\.9 m from original/);
+  if (process.env.E2E_SHOTS) await page.screenshot({ path: join(process.env.E2E_SHOTS, 'photo-dialog.png') });
+  await page.click('#dlg-photo button[value=close]');
+
   await page.click('#go-export');
   await page.fill('#dlg-export [name=maxWidth]', '320');
   await page.fill('#dlg-export [name=maxHeight]', '');
@@ -65,9 +88,9 @@ try {
   const csv = execFileSync('unzip', ['-p', zipPath, 'Site-survey-Brussels/locations.csv']).toString();
   console.log(csv);
   const lines = csv.trim().split('\r\n');
-  assert.equal(lines[0], 'filename,latitude,longitude,accuracy_m,altitude_m,taken_at');
-  assert.match(lines[1], /^Site-survey-Brussels_0001\.jpg,50\.85033960,4\.35171030,2\.50,/);
-  assert.match(lines[2], /^Site-survey-Brussels_0002\.jpg,50\.85041000,4\.35180000,25\.00,/);
+  assert.equal(lines[0], 'filename,latitude,longitude,accuracy_m,altitude_m,direction_deg,direction_ref,taken_at');
+  assert.match(lines[1], /^Site-survey-Brussels_0001\.jpg,50\.85033960,4\.35171030,2\.50,,90\.0,M,/);
+  assert.match(lines[2], /^Site-survey-Brussels_0002\.jpg,50\.85036000,4\.35172000,1\.80,/);
 
   execFileSync('unzip', ['-o', '-q', zipPath, '-d', dir]);
   const info = execFileSync('python3', ['-c', `
@@ -75,9 +98,11 @@ from PIL import Image
 im = Image.open('${dir}/Site-survey-Brussels/Site-survey-Brussels_0001.jpg')
 g = im.getexif().get_ifd(0x8825)
 d = lambda v: float(v[0]) + float(v[1])/60 + float(v[2])/3600
-print(im.size[0], im.size[1], round(d(g[2]), 8), round(d(g[4]), 8), float(g[31]))`]).toString().trim();
+print(im.size[0], im.size[1], round(d(g[2]), 8), round(d(g[4]), 8), float(g[31]), float(g[17]), g[16])`]).toString().trim();
   console.log('JPEG check:', info);
-  const [w, , lat, lon, acc] = info.split(' ').map(Number);
+  const [w, , lat, lon, acc, heading, headingRef] = info.split(' ').map((v, i) => (i === 6 ? v : Number(v)));
+  assert.ok(Math.abs(heading - 90) < 0.01, `direction ${heading}`);
+  assert.equal(headingRef, 'M');
   assert.equal(w, 320);
   assert.ok(Math.abs(lat - 50.8503396) < 1e-7); // 1e-4 arcsec quantisation (~3 mm)
   assert.ok(Math.abs(lon - 4.3517103) < 1e-7);

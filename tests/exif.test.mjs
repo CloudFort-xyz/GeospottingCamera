@@ -21,7 +21,7 @@ test('injected EXIF is readable by Pillow with correct GPS values', () => {
   // Create a small JPEG with a JFIF header using Pillow.
   execFileSync('python3', ['-c', `from PIL import Image; Image.new('RGB',(64,48),(200,50,50)).save('${src}', quality=90)`]);
   const meta = {
-    lat: 50.8503396, lon: -4.3517103, accuracy: 3.21, altitude: 56.7, heading: 271.5,
+    lat: 50.8503396, lon: -4.3517103, accuracy: 3.21, altitude: 56.7, heading: 271.5, headingRef: 'M',
     fixTime: Date.UTC(2026, 9, 10, 11, 8, 12, 345), takenAt: Date.UTC(2026, 9, 10, 11, 8, 13),
   };
   const out = injectGps(new Uint8Array(readFileSync(src)), meta);
@@ -36,7 +36,7 @@ dec = lambda v: float(v[0]) + float(v[1])/60 + float(v[2])/3600
 print(json.dumps({
   'lat': dec(g[2]) * (1 if g[1]=='N' else -1),
   'lon': dec(g[4]) * (1 if g[3]=='E' else -1),
-  'alt': float(g[6]), 'acc': float(g[31]), 'dir': float(g[17]),
+  'alt': float(g[6]), 'acc': float(g[31]), 'dir': float(g[17]), 'dirRef': g[16],
   'date': g[29], 'datum': g[18], 'size': im.size,
   'comment': im.info.get('comment', b'').decode(),
 }))`;
@@ -46,6 +46,7 @@ print(json.dumps({
   assert.equal(r.alt, 56.7);
   assert.equal(r.acc, 3.21);
   assert.equal(r.dir, 271.5);
+  assert.equal(r.dirRef, 'M');
   assert.equal(r.date, '2026:10:10');
   assert.equal(r.datum, 'WGS-84');
   assert.deepEqual(r.size, [64, 48]);

@@ -74,7 +74,7 @@ export class GeoTracker extends EventTarget {
     const fix = {
       lat: c.latitude, lon: c.longitude, accuracy: c.accuracy,
       altitude: c.altitude, altitudeAccuracy: c.altitudeAccuracy,
-      heading: Number.isFinite(c.heading) && c.speed > 0.5 ? c.heading : null,
+      heading: Number.isFinite(c.heading) && c.speed > 0.5 ? c.heading : null, // course over ground (true north)
       fixTime: this.receivedAt,
     };
     if (this.age() > maxFixAge) return { state: 'stale', fix };

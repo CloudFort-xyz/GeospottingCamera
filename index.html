@@ -57,6 +57,7 @@
     </button>
     <div class="gps-pill" id="gps-pill" data-state="none">
       <span class="dot"></span><span id="gps-text">Waiting for GPS…</span>
+      <span class="compass" id="compass-text" hidden></span>
     </div>
     <p class="camera-error" id="camera-error" hidden></p>
     <div class="camera-controls">
@@ -120,9 +121,17 @@
   <dialog id="dlg-photo">
     <form method="dialog" class="dlg photo-dlg">
       <img id="photo-full" alt="">
+      <div class="live" id="photo-live" data-state="none">
+        <svg class="live-arrow" id="live-arrow" viewBox="0 0 24 24" hidden><path d="M12 2l7 19-7-4-7 4z"/></svg>
+        <div>
+          <strong id="live-distance">Waiting for GPS…</strong>
+          <span class="meta" id="live-detail"></span>
+        </div>
+      </div>
       <dl id="photo-info"></dl>
       <div class="actions">
         <button class="btn danger" type="button" id="photo-delete">Delete</button>
+        <button class="btn" type="button" id="photo-relocate">Set to current location</button>
         <a class="btn" id="photo-map" target="_blank" rel="noopener">Map</a>
         <button class="btn primary" value="close">Close</button>
       </div>
