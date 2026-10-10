@@ -1,5 +1,13 @@
-// App-shell service worker: precache everything, serve cache-first, update in background.
-const VERSION = 'v1.2.0';
+// App-shell service worker.
+//
+// Each version precaches the complete shell into its own cache, bypassing the
+// HTTP cache (GitHub Pages sends max-age=600), so a cache always holds one
+// consistent build. Requests are served cache-first from that cache only; there
+// is no per-file background revalidation, which could mix builds. A new version
+// waits until the page asks it to take over (user taps "Reload").
+//
+// VERSION is replaced with the commit SHA by the deploy workflow.
+const VERSION = 'v1.3.0';
 const CACHE = `geospotting-${VERSION}`;
 const ASSETS = [
   './', 'index.html', 'manifest.webmanifest', 'css/app.css',
@@ -9,7 +17,11 @@ const ASSETS = [
 ];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS.map((u) => new Request(u, { cache: 'reload' })))));
+});
+
+self.addEventListener('message', (e) => {
+  if (e.data === 'skip-waiting') self.skipWaiting();
 });
 
 self.addEventListener('activate', (e) => {
@@ -21,12 +33,9 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== location.origin) return;
-  e.respondWith(caches.open(CACHE).then(async (cache) => {
-    const cached = await cache.match(req, { ignoreSearch: true });
-    const network = fetch(req).then((res) => {
-      if (res.ok) cache.put(req, res.clone());
-      return res;
-    }).catch(() => cached);
-    return cached || network;
-  }));
+  e.respondWith((async () => {
+    const cache = await caches.open(CACHE);
+    const cached = await cache.match(req.mode === 'navigate' ? 'index.html' : req, { ignoreSearch: true });
+    return cached || fetch(req);
+  })());
 });

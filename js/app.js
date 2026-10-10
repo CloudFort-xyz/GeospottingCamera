@@ -644,6 +644,26 @@ $('#dlg-settings').addEventListener('close', () => {
 window.addEventListener('hashchange', route);
 route();
 
+// Service worker: a new version installs in the background and waits; we offer
+// a reload instead of swapping code under a running session (e.g. mid-capture).
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js').catch((e) => console.warn('SW registration failed', e));
+  let updateRequested = false;
+  const offerUpdate = (worker) => {
+    $('#update-banner').hidden = false;
+    $('#update-reload').onclick = () => { updateRequested = true; worker.postMessage('skip-waiting'); };
+  };
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (updateRequested) location.reload();
+  });
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((reg) => {
+    if (reg.waiting && navigator.serviceWorker.controller) offerUpdate(reg.waiting);
+    reg.addEventListener('updatefound', () => {
+      const worker = reg.installing;
+      worker?.addEventListener('statechange', () => {
+        if (worker.state === 'installed' && navigator.serviceWorker.controller) offerUpdate(worker);
+      });
+    });
+    // Installed PWAs can stay open for days; check for a new version whenever we come back.
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update().catch(() => {}); });
+  }).catch((e) => console.warn('SW registration failed', e));
 }

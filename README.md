@@ -43,6 +43,7 @@ No build step and no runtime dependencies: any static host works. Camera and geo
 npm start            # http://localhost:8080 (tiny Node static server)
 npm test             # unit tests: EXIF round-trip via Pillow, ZIP via `unzip -t`, CSV
 npm run test:e2e     # Playwright + fake camera + spoofed GPS: capture → export → verify ZIP/EXIF
+npm run test:sw      # service-worker update consistency under Pages-like HTTP caching
 npm run icons        # re-render PNG icons from icons/icon.svg
 ```
 
@@ -54,7 +55,9 @@ The tests need `python3` with Pillow, `unzip`, and `playwright` (with Chromium) 
 
 One-time setup: **Settings → Pages → Build and deployment → Source: GitHub Actions**. Pages on a private repository requires a paid GitHub plan, and the published site is public unless you're on Enterprise Cloud with access control.
 
-Bump `VERSION` in `sw.js` on each release, so installed clients pick up the new app shell. Any other static HTTPS host (Netlify, S3/CloudFront, …) works too.
+The deploy step stamps `VERSION` in `sw.js` with the commit SHA, so every deploy gets a fresh, consistent cache. On other hosts, bump `VERSION` manually.
+
+**Updates**: the service worker precaches each version completely, bypassing the HTTP cache, and serves only from that version's cache. A new version installs in the background and the app shows an "A new version is available · Reload" banner. The switch happens only when you tap it, or when the app is fully closed and reopened, so a running session never mixes old and new files. `npm run test:sw` covers this, using Pages-like `max-age=600` caching. Any other static HTTPS host (Netlify, S3/CloudFront, …) works too.
 
 ## Architecture
 

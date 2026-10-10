@@ -188,6 +188,13 @@ dialog::backdrop { background: rgb(0 0 0 / .5); }
 .photo-dlg dt { color: var(--muted); }
 .photo-dlg dd { margin: 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 
+.update-banner {
+  position: fixed; left: 16px; right: 16px; bottom: calc(16px + var(--safe-bottom)); z-index: 200;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  max-width: 480px; margin: 0 auto; padding: 10px 10px 10px 16px; border-radius: var(--radius);
+  background: #111827; color: #fff; box-shadow: 0 6px 20px rgb(0 0 0 / .35);
+}
+
 .toast {
   position: fixed; left: 50%; bottom: calc(120px + var(--safe-bottom)); z-index: 100;
   transform: translate(-50%, 20px); opacity: 0; pointer-events: none;
