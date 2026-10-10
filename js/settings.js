@@ -7,7 +7,7 @@ export const DEFAULTS = {
   maxFixAge: 5,         // seconds a fix stays valid for tagging a photo
   allowInaccurate: true, // ask before saving when accuracy target isn't met (false = block)
   captureQuality: 0.95, // JPEG quality for stored originals
-  resolution: 4096,     // requested camera width (ideal)
+  resolution: 4096,     // requested camera width (ideal); 4096 = max available
   exportMaxWidth: 1920,
   exportMaxHeight: 1920,
   exportQuality: 0.85,

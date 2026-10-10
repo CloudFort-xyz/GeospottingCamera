@@ -39,6 +39,20 @@ try {
   await page.waitForFunction(() => document.querySelector('#shot-count').textContent === '1');
   await page.evaluate(() => clearInterval(window.__compassTimer));
 
+  // Custom camera resolution: the stream restarts at the requested width.
+  await page.click('#camera-settings');
+  await page.selectOption('#dlg-settings select[name=resolution]', 'custom');
+  assert.equal(await page.isVisible('#custom-resolution-row'), true);
+  await page.fill('#dlg-settings [name=customResolution]', '1280');
+  await page.click('#dlg-settings button[value=save]');
+  await page.waitForFunction(() => document.querySelector('#viewfinder').videoWidth === 1280);
+  await page.waitForSelector('#shutter:not([disabled])');
+  await page.click('#camera-settings');
+  assert.equal(await page.inputValue('#dlg-settings select[name=resolution]'), 'custom');
+  assert.equal(await page.inputValue('#dlg-settings [name=customResolution]'), '1280');
+  assert.match(await page.textContent('#stream-info'), /1280 × 720/);
+  await page.click('#dlg-settings button[value=cancel]');
+
   // Second shot with poor accuracy -> confirmation dialog.
   await context.setGeolocation({ latitude: 50.85041, longitude: 4.35180, accuracy: 25 });
   await page.waitForSelector('#shutter[data-state="coarse"]');
@@ -107,6 +121,24 @@ print(im.size[0], im.size[1], round(d(g[2]), 8), round(d(g[4]), 8), float(g[31])
   assert.ok(Math.abs(lat - 50.8503396) < 1e-7); // 1e-4 arcsec quantisation (~3 mm)
   assert.ok(Math.abs(lon - 4.3517103) < 1e-7);
   assert.equal(acc, 2.5);
+  // Settings: persistent storage request + delete all data (two confirmations).
+  await page.keyboard.press('Escape'); // close export dialog
+  await page.click('#open-settings');
+  await page.waitForFunction(() => document.querySelector('#storage-info').textContent.includes('MB used'));
+  console.log('Storage:', await page.textContent('#storage-info'));
+  if (await page.isVisible('#persist-storage')) {
+    await page.click('#persist-storage');
+    await page.waitForFunction(() => document.querySelector('#dlg-prompt[open]') || document.querySelector('#storage-info').textContent.includes('is persistent'));
+    if (await page.isVisible('#dlg-prompt[open]')) await page.click('#prompt-ok');
+  }
+  await page.click('#delete-all');
+  await page.waitForSelector('#dlg-prompt[open]');
+  assert.match(await page.textContent('#prompt-message'), /1 project and 3 photos/);
+  await page.click('#prompt-ok');
+  await page.waitForFunction(() => document.querySelector('#prompt-title').textContent === 'Are you absolutely sure?' && document.querySelector('#dlg-prompt[open]'));
+  await page.click('#prompt-ok');
+  await page.waitForSelector('#view-projects:not([hidden]) #projects-empty:not([hidden])');
+  assert.equal(await page.evaluate(() => document.querySelectorAll('#project-list li').length), 0);
   console.log('E2E OK');
 } catch (e) {
   await page.screenshot({ path: join(tmpdir(), 'e2e-failure.png') });

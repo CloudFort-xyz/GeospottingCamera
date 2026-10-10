@@ -528,21 +528,91 @@ function download({ blob, filename }) {
 
 // ---------- settings ----------
 
+const PRESET_RESOLUTIONS = ['1920', '3840', '4096'];
+
+async function renderStorageInfo() {
+  const info = $('#storage-info');
+  const btn = $('#persist-storage');
+  if (!navigator.storage?.estimate) {
+    info.textContent = 'Storage information is not available in this browser.';
+    btn.hidden = true;
+    return;
+  }
+  const [{ usage, quota }, persisted] = await Promise.all([navigator.storage.estimate(), navigator.storage.persisted?.()]);
+  info.textContent = `${(usage / 1048576).toFixed(1)} MB used of ~${(quota / 1073741824).toFixed(1)} GB available. ` +
+    (persisted
+      ? 'Storage is persistent: the browser will not evict it automatically.'
+      : 'Storage is not persistent: the browser may evict it when the device runs low on space.');
+  btn.hidden = !!persisted || !navigator.storage.persist;
+}
+
+$('#persist-storage').addEventListener('click', async () => {
+  const granted = await navigator.storage.persist().catch(() => false);
+  await renderStorageInfo();
+  if (!granted) {
+    await ask({
+      title: 'Not granted',
+      message: 'The browser declined persistent storage. Chrome grants it automatically to installed apps ' +
+        '(Add to Home screen / Install) and frequently used sites; Firefox asks you; Safari grants it to ' +
+        'Home Screen apps. Install the app and try again.',
+      ok: 'OK',
+    });
+  } else {
+    toast('Persistent storage granted');
+  }
+});
+
+$('#delete-all').addEventListener('click', async () => {
+  const [projects, photos] = await Promise.all([db.listProjects(), db.countPhotos()]);
+  if (!projects.length) { toast('There is no data to delete.'); return; }
+  const first = await ask({
+    title: 'Delete all data?',
+    message: `This permanently deletes ${projects.length} project${projects.length === 1 ? '' : 's'} and ` +
+      `${photos} photo${photos === 1 ? '' : 's'} stored on this device. Export anything you want to keep first.`,
+    ok: 'Continue',
+  });
+  if (!first) return;
+  const second = await ask({
+    title: 'Are you absolutely sure?',
+    message: 'This cannot be undone. All projects and photos will be gone.',
+    ok: 'Delete everything',
+  });
+  if (!second) return;
+  await db.deleteAll();
+  saveSettings({ lastProjectId: null });
+  $('#dlg-settings').close('deleted');
+  toast('All data deleted');
+  if (location.hash === '#/' || location.hash === '') route(); else location.hash = '#/';
+});
+
+function syncResolutionInputs() {
+  const form = $('#dlg-settings form');
+  const custom = form.resolution.value === 'custom';
+  $('#custom-resolution-row').hidden = !custom;
+  form.customResolution.required = custom;
+}
+$('#dlg-settings select[name=resolution]').addEventListener('change', () => {
+  syncResolutionInputs();
+  const form = $('#dlg-settings form');
+  if (form.resolution.value === 'custom') form.customResolution.focus();
+});
+
 $('#open-settings').addEventListener('click', async () => {
   const s = getSettings();
   const form = $('#dlg-settings form');
   form.accuracy.value = s.accuracy;
   form.maxFixAge.value = s.maxFixAge;
   form.allowInaccurate.checked = s.allowInaccurate;
-  form.resolution.value = String(s.resolution);
+  const preset = PRESET_RESOLUTIONS.includes(String(s.resolution));
+  form.resolution.value = preset ? String(s.resolution) : 'custom';
+  form.customResolution.value = preset ? '' : s.resolution;
+  syncResolutionInputs();
+  const stream = $('#stream-info');
+  stream.hidden = !camera.active;
+  if (camera.active) stream.textContent = `Current camera stream: ${camera.video.videoWidth} × ${camera.video.videoHeight}`;
   form.captureQuality.value = s.captureQuality;
-  const info = $('#storage-info');
-  info.textContent = '';
-  if (navigator.storage?.estimate) {
-    const [{ usage, quota }, persisted] = await Promise.all([navigator.storage.estimate(), navigator.storage.persisted?.()]);
-    info.textContent = `Storage: ${(usage / 1048576).toFixed(1)} MB used of ~${(quota / 1073741824).toFixed(1)} GB` +
-      (persisted ? ' · persistent' : ' · not persistent (browser may evict under pressure)');
-  }
+  $('#storage-info').textContent = '';
+  renderStorageInfo();
   $('#dlg-settings').showModal();
 });
 
@@ -551,11 +621,14 @@ $('#dlg-settings').addEventListener('close', () => {
   if (dlg.returnValue !== 'save') return;
   const form = dlg.querySelector('form');
   const prevRes = getSettings().resolution;
+  const resolution = form.resolution.value === 'custom'
+    ? Math.round(Number(form.customResolution.value))
+    : Number(form.resolution.value);
   saveSettings({
     accuracy: Number(form.accuracy.value),
     maxFixAge: Number(form.maxFixAge.value),
     allowInaccurate: form.allowInaccurate.checked,
-    resolution: Number(form.resolution.value),
+    resolution,
     captureQuality: Number(form.captureQuality.value),
   });
   if (!$('#view-camera').hidden) {

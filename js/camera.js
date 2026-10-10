@@ -13,7 +13,9 @@ export class Camera {
       video: {
         facingMode: { ideal: facingMode },
         width: { ideal: resolution },
-        height: { ideal: resolution },
+        // "Max available" asks for a huge square so the browser picks the largest mode;
+        // a specific width leaves the aspect ratio to the camera.
+        ...(resolution >= 4096 ? { height: { ideal: resolution } } : {}),
       },
     });
     this.video.srcObject = this.stream;

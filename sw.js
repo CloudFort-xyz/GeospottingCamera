@@ -1,5 +1,5 @@
 // App-shell service worker: precache everything, serve cache-first, update in background.
-const VERSION = 'v1.1.0';
+const VERSION = 'v1.2.0';
 const CACHE = `geospotting-${VERSION}`;
 const ASSETS = [
   './', 'index.html', 'manifest.webmanifest', 'css/app.css',

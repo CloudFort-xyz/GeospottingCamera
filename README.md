@@ -28,7 +28,11 @@ A zero-dependency Progressive Web App for taking photos tagged with high-precisi
   <project>/locations.csv   # filename,latitude,longitude,accuracy_m,altitude_m,direction_deg,direction_ref,taken_at
   ```
   The ZIP is downloaded directly, or shared through the Web Share API (on mobile, where available).
-- **Offline**: the app shell is precached by a service worker. Photos live in IndexedDB, and persistent storage is requested on the first capture.
+- **Offline**: the app shell is precached by a service worker. Photos live in IndexedDB.
+- **Settings**:
+  - **Camera resolution**: Full HD, 4K, max available, or a **custom width**. The browser treats the width as a preference, so Settings shows the actual stream size the camera delivered.
+  - **Persistent storage**: the browser's `navigator.storage.persist()`. Settings shows usage and persistence status, with a button to request it; it's also requested silently on the first capture. Chrome grants it automatically to installed PWAs and frequently used sites, Firefox asks, and Safari grants it to Home Screen apps.
+  - **Delete all data**: removes every project and photo after two confirmations.
 - Screen wake lock while the camera is open. On desktop, Space/Enter takes a photo and Esc closes the camera.
 
 ## Running

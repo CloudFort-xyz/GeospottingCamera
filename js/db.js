@@ -75,6 +75,18 @@ export async function addPhoto(projectId, photo) {
   return record;
 }
 
+/** Removes every project and photo. */
+export async function deleteAll() {
+  const tx = (await open()).transaction(['projects', 'photos'], 'readwrite');
+  tx.objectStore('projects').clear();
+  tx.objectStore('photos').clear();
+  return new Promise((resolve, reject) => { tx.oncomplete = resolve; tx.onerror = () => reject(tx.error); });
+}
+
+export async function countPhotos() {
+  return done((await store('photos')).count());
+}
+
 export async function listPhotos(projectId) {
   const photos = await done((await store('photos')).index('projectId').getAll(projectId));
   return photos.sort((a, b) => a.seq - b.seq);

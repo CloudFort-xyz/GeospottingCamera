@@ -86,12 +86,28 @@
           <option value="1920">1920 (Full HD)</option>
           <option value="3840">3840 (4K)</option>
           <option value="4096">Max available</option>
+          <option value="custom">Custom…</option>
         </select>
       </label>
+      <label id="custom-resolution-row" hidden>Custom width (px)
+        <input type="number" name="customResolution" min="160" max="8192" step="1">
+      </label>
+      <p class="meta" id="stream-info" hidden></p>
       <label>Stored photo JPEG quality
         <input type="number" name="captureQuality" min="0.5" max="1" step="0.01" required>
       </label>
+
+      <h3>Storage</h3>
       <p class="meta" id="storage-info"></p>
+      <div class="inline">
+        <button class="btn" type="button" id="persist-storage">Request persistent storage</button>
+      </div>
+
+      <h3>Danger zone</h3>
+      <div class="inline">
+        <button class="btn danger" type="button" id="delete-all">Delete all data…</button>
+      </div>
+
       <div class="actions">
         <button class="btn" value="cancel" formnovalidate>Cancel</button>
         <button class="btn primary" value="save">Save</button>
